@@ -38,20 +38,23 @@ type GetTokenResponse struct {
 
 // Write writes the token to a file
 func (t *GetTokenResponse) Write(filePath string) error {
-	f, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY, 0644)
+	// prevent writing an empty token to the file
+	if t.RefreshToken == "" || t.AccessToken == "" || t.ExpiresIn == 0 || t.TokenType == "" {
+		return fmt.Errorf("token is empty: not writing to file (%+v)", t)
+	}
+
+	f, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
 	}
+
+	// close the file afterwards
+	defer f.Close()
 
 	// pack up the token into bytes
 	bytes, err := json.Marshal(t)
 	if err != nil {
 		return err
-	}
-
-	// prevent writing an empty token to the file
-	if t.RefreshToken == "" || t.AccessToken == "" || t.ExpiresIn == 0 || t.TokenType == "" {
-		return fmt.Errorf("token is empty: not writing to file (%+v)", t)
 	}
 
 	fmt.Printf("writing token to %s\n", filePath)
@@ -133,6 +136,9 @@ func LoadToken(filePath string) (*GetTokenResponse, error) {
 	if err != nil {
 		return token, err
 	}
+
+	// make sure the file is closed afterwards
+	defer f.Close()
 
 	bytes, err := ioutil.ReadAll(f)
 	if err != nil {
@@ -235,7 +241,7 @@ func main() {
 
 		err = token.Write(tokenFile)
 		if err != nil {
-			fmt.Printf("error: %v", err)
+			fmt.Printf("error writing token: %v", err)
 			return
 		}
 
@@ -244,7 +250,7 @@ func main() {
 		lintArgs(clientID, clientSecret, clientCode, false)
 		oldToken, err := LoadToken(tokenFile)
 		if err != nil {
-			fmt.Printf("error: %v", err)
+			fmt.Printf( "error loading token: %v", err)
 			return
 		}
 
@@ -258,19 +264,19 @@ func main() {
 
 		token, err := GetToken(clientID, clientSecret, values)
 		if err != nil {
-			fmt.Printf("error: %v", err)
+			fmt.Printf("error obtaining token: %v", err)
 			return
 		}
 
 		err = token.Write(tokenFile)
 		if err != nil {
-			fmt.Printf("error: %v", err)
+			fmt.Printf("error writing token: %v", err)
 			return
 		}
 	case "show-token":
 		token, err := LoadToken(tokenFile)
 		if err != nil {
-			fmt.Printf("error: %v", err)
+			fmt.Printf("error loading token: %v", err)
 			return
 		}
 
